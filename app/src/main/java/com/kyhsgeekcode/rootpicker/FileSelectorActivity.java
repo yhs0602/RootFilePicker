@@ -13,8 +13,9 @@ import java.util.*;
 
 public class FileSelectorActivity extends ListActivity
 {
-	private List<String> item = (List<String>) null;
-	private List<String> path = (List<String>) null;
+	/*private List<String> item = (List<String>) null;
+	 private List<String> path = (List<String>) null;*/
+	List<Item> items = new ArrayList<>();
 	private String root = "/";
 	private TextView mPath;
 	String lspath="";
@@ -66,7 +67,37 @@ public class FileSelectorActivity extends ListActivity
 			fos.flush();
 			fos.close();
 			lspath = dest.getAbsolutePath();
-			RootTools.runBinary(this, "chmod", "777 " + lspath);
+			try
+			{
+				ProcessBuilder builder = new ProcessBuilder("su");
+				builder.redirectErrorStream(true);
+				java.lang.Process shProcess = builder.start();
+				DataOutputStream os = new DataOutputStream(shProcess.getOutputStream());
+				DataInputStream osRes = new DataInputStream(shProcess.getInputStream());
+				BufferedReader reader = new BufferedReader(new InputStreamReader(osRes));
+				BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os));
+
+				// osErr = new DataInputStream(shProcess.getErrorStream());
+
+				if (null != os && null != osRes)
+				{								
+					writer.write("(( chmod 711 " + lspath + ") && echo --EOF--) || echo --EOF--\n");
+					writer.flush();
+					String tmp;
+					Log.d(TAG, "DOING");
+					tmp = reader.readLine();
+					while (tmp != null && ! tmp.trim().equals("--EOF--"))
+					{			
+						Log.d(TAG, "" + tmp);			
+					}
+					Log.d(TAG, "Chmod done");	
+				}
+			}
+			catch (IOException e)
+			{
+				Log.e(TAG, "", e);
+			}
+			//RootTools.runBinary(this, "chmod", "711 " + lspath);
 		}
 		catch (IOException e)
 		{
@@ -78,26 +109,32 @@ public class FileSelectorActivity extends ListActivity
 	private void getDir(String dirPath)
 	{
 		mPath.setText("Location: " + dirPath);
-		item = new ArrayList<String>();
-		path = new ArrayList<String>();
+		/*item = new ArrayList<String>();
+		 path = new ArrayList<String>();*/
+		items = new ArrayList<>();
 		File f = new File(dirPath);
 		File[] files = f.listFiles();
 		if (!dirPath.equals(root))
 		{
-			item.add(root);
-			path.add(root);
-			item.add("../");
-			path.add(f.getParent());
+			items.add(new Item(root,root));
+			items.add(new Item("../",f.getParent()));
+
+			/*
+			 item.add(root);
+			 path.add(root);
+			 item.add("../");
+			 path.add(f.getParent());*/
 		}
 
 		for (int i = 0; i < files.length; i++)
 		{
 			File file = files[i];
-			path.add(file.getPath());
-			if (file.isDirectory())
-				item.add(file.getName() + "/");
-			else
-				item.add(file.getName());
+			items.add(new Item(file.isDirectory()?file.getName()+"/":file.getName(),file.getPath()));
+			/*path.add(file.getPath());
+			 if (file.isDirectory())
+			 item.add(file.getName() + "/");
+			 else
+			 item.add(file.getName());*/
 		}
 		RefreshList();
 	}
@@ -105,14 +142,16 @@ public class FileSelectorActivity extends ListActivity
 	@Override
 	protected void onListItemClick(ListView l, View v, int position, long id)
 	{
-		final File file = new File(path.get(position));
-		if (file.isDirectory())
+		String p=items.get(position).path;
+		final File file = new File(p);
+		/*path.get(position)*/
+		if (file.isDirectory()||items.get(position).caption.endsWith("/"))
 		{
 			if (file.canRead())
-				getDir(path.get(position));
+				getDir(p);
 			else
 			{
-				getDirRoot(path.get(position));
+				getDirRoot(p);
 				/**/
 			}
 		}
@@ -124,9 +163,8 @@ public class FileSelectorActivity extends ListActivity
 				.setPositiveButton("OK", new DialogInterface.OnClickListener() {
 					public void onClick(DialogInterface dialog, int which)
 					{
-						// TODO Auto-generated method stub
-						Intent result = new Intent("com.kyunggi.renamer.RESULT_ACTION");
-						result.putExtra("com.kyunggi.renamer.path", file.getAbsolutePath());
+						Intent result = new Intent("RootPicker.ACTION");
+						result.putExtra("path", file.getAbsolutePath());
 						setResult(Activity.RESULT_OK, result);
 						finish();
 					}
@@ -136,6 +174,7 @@ public class FileSelectorActivity extends ListActivity
 
 	private void getDirRoot(String dirPath)
 	{
+		mPath.setText("Location: " + dirPath);
 		if (RootTools.isRootAvailable())
 		{
 			while (!RootTools.isAccessGiven())
@@ -143,25 +182,27 @@ public class FileSelectorActivity extends ListActivity
 				RootTools.offerSuperUser(this);
 			}
 			List<DirEnt> entries= runLs(dirPath);
-			mPath.setText("Location: " + dirPath);
-			item = new ArrayList<String>();
-			path = new ArrayList<String>();
+			items = new ArrayList<>();
 			if (!dirPath.equals(root))
 			{
-				item.add(root);
-				path.add(root);
-				item.add("../");
-				path.add(new File(dirPath).getParent());
+				items.add(new Item(root,root));
+				items.add(new Item("../",new File(dirPath).getParent()));
+				/*
+				 item.add(root);
+				 path.add(root);
+				 item.add("../");
+				 path.add(f.getParent());*/
 			}
 
 			for (int i = 0; i < entries.size(); i++)
 			{
 				DirEnt file = entries.get(i);
-				path.add(dirPath + "/" + file.name);
-				if (file.isDirectory())
-					item.add(file.getName() + "/");
-				else
-					item.add(file.getName());
+				items.add(new Item(file.isDirectory()? file.getName()+"/":file.getName(),dirPath+"/"+file.getName()));
+				/*path.add(dirPath + "/" + file.name);
+				 if (file.isDirectory())
+				 item.add(file.getName() + "/");
+				 else
+				 item.add(file.getName());*/
 			}
 			RefreshList();
 		}
@@ -181,71 +222,130 @@ public class FileSelectorActivity extends ListActivity
 
 	private void RefreshList()
 	{
-		ArrayAdapter<String> fileList = new ArrayAdapter<String>(this, R.layout.row, item);
-		fileList.sort(new Comparator<String>(){
+		Collections.sort(items, new Comparator<Item>(){
 				@Override
-				public int compare(String p1, String p2)
+				public int compare(FileSelectorActivity.Item p1, FileSelectorActivity.Item p2)
 				{
-					if (p1.equals("/"))
+					int cdir=compareDir(p1,p2);
+					if(cdir==0)
 					{
-						return -1;
-					}		
-					if (p1.equals("..") || p1.equals("../"))
+						if(p1.caption.endsWith("/"))
+						{
+							if(p1.caption.equals("/"))
+							{
+								return -1;
+							}
+							if(p2.caption.equals("/"))
+							{
+								return 1;
+							}
+							if(p1.caption.equals("../"))
+							{
+								return -1;
+							}
+							if(p2.caption.equals("../"))
+							{
+								return 1;
+							}
+							return p1.caption.compareTo(p2.caption);
+						}else
+						{
+							return p1.caption.compareTo(p2.caption);
+						}
+					}else
 					{
-						return -1;
+						return cdir;
 					}
-					if(p2.equals("/"))
-					{
-						return 1;
-					}
-					if (p2.equals("..") || p2.equals("../"))
-					{
-						return 1;
-					}
-					if (p1.endsWith("/") && !p2.endsWith("/"))
-					{
-						return -1;
-					}
-					if (p2.endsWith("/") && !p1.endsWith("/"))
-					{
-						return 1;
-					}
-					return p1.compareTo(p2);
-				}		
-			});
-		Collections.sort(path, new Comparator<String>(){
-				@Override
-				public int compare(String p1, String p2)
+				}
+				int compareDir(Item p1, Item p2)
 				{
-					String n1=new File(p1).getName();
-					String n2=new File(p2).getName();
-					if (n1.equals("/"))
+					if(p1.caption.endsWith("/"))
 					{
-						return -1;
-					}
-					if (n1.equals("..") || n1.equals("../"))
-					{
-						return -1;
-					}
-					if(n2.equals("/"))
-					{
-						return 1;
-					}
-					if (n2.equals("..") || n2.equals("../"))
+						if(p2.caption.endsWith("/"))
+						{
+							return 0;
+						}
+						else
+						{
+							return -1;
+						}
+					}else if(p2.caption.endsWith("/"))
 					{
 						return 1;
 					}
-					if ((p1.endsWith("/")||new File(p1).isDirectory()) && !(p2.endsWith("/")||new File(p2).isDirectory()))
-					{
-						return -1;
-					}
-					if ((p2.endsWith("/") ||new File(p2).isDirectory())&& !(p1.endsWith("/")||new File(p1).isDirectory()))
-					{
-						return 1;
-					}
-					return n1.compareTo(n2);
+					return p1.caption.compareTo(p2.caption);
 				}
 			});
+		ArrayList<String> item=new ArrayList<>();
+		for(Item i:items)
+		{
+			item.add(i.caption);
+		};
+		ArrayAdapter<String> fileList = new ArrayAdapter<String>(this, R.layout.row, item);
+		/*fileList.sort(new Comparator<String>(){
+		 @Override
+		 public int compare(String p1, String p2)
+		 {
+		 if (p1.equals("/"))
+		 {
+		 return -1;
+		 }		
+		 if (p1.equals("..") || p1.equals("../"))
+		 {
+		 return -1;
+		 }
+		 if(p2.equals("/"))
+		 {
+		 return 1;
+		 }
+		 if (p2.equals("..") || p2.equals("../"))
+		 {
+		 return 1;
+		 }
+		 if (p1.endsWith("/") && !p2.endsWith("/"))
+		 {
+		 return -1;
+		 }
+		 if (p2.endsWith("/") && !p1.endsWith("/"))
+		 {
+		 return 1;
+		 }
+		 return p1.compareTo(p2);
+		 }		
+		 });
+		 Collections.sort(path, new Comparator<String>(){
+		 @Override
+		 public int compare(String p1, String p2)
+		 {
+		 String n1=new File(p1).getName();
+		 String n2=new File(p2).getName();
+		 if (n1.equals("/"))
+		 {
+		 return -1;
+		 }
+		 if (n1.equals("..") || n1.equals("../"))
+		 {
+		 return -1;
+		 }
+		 if(n2.equals("/"))
+		 {
+		 return 1;
+		 }
+		 if (n2.equals("..") || n2.equals("../"))
+		 {
+		 return 1;
+		 }
+		 if ((p1.endsWith("/")||new File(p1).isDirectory()) && !(p2.endsWith("/")||new File(p2).isDirectory()))
+		 {
+		 return -1;
+		 }
+		 if ((p2.endsWith("/") ||new File(p2).isDirectory())&& !(p1.endsWith("/")||new File(p1).isDirectory()))
+		 {
+		 return 1;
+		 }
+		 return n1.compareTo(n2);
+		 }
+		 });*/
 		setListAdapter(fileList);
 	}
 	private List<DirEnt> runLs(String path)
@@ -337,7 +437,7 @@ public class FileSelectorActivity extends ListActivity
 
 		public boolean isDirectory()
 		{		
-			return type == 4;
+			return (type & 4)!=0;
 		}
 
 		public String getName()
@@ -348,7 +448,7 @@ public class FileSelectorActivity extends ListActivity
 	@Override
 	public void onBackPressed()
 	{
-		String path=mPath.getText().toString().replaceAll("Location :", "");
+		String path=mPath.getText().toString().replaceAll("Location: ", "");
 		if (root.equals(path))
 		{
 			super.onBackPressed();
@@ -356,7 +456,7 @@ public class FileSelectorActivity extends ListActivity
 		else
 		{
 			File file=new File(path).getParentFile();
-			if (file.isDirectory())
+			//if (file.isDirectory())//must be a directory
 			{
 				if (file.canRead())
 					getDir(file.getPath());
@@ -369,5 +469,15 @@ public class FileSelectorActivity extends ListActivity
 		}
 		return ;
 	}
+	class Item
+	{
+		String caption;
+		String path;
 
+		public Item(String caption, String path)
+		{
+			this.caption = caption;
+			this.path = path;
+		}
+	}
 }
