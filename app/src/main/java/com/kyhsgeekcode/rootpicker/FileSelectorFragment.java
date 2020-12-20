@@ -10,9 +10,113 @@ import android.widget.*;
 import com.stericson.RootTools.*;
 import java.io.*;
 import java.util.*;
+import android.database.*;
+import android.widget.AdapterView.*;
 
-public class FileSelectorActivity extends ListActivity
+public class FileSelectorFragment extends ListFragment implements ListAdapter
 {
+	private Context mContext;
+
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        mContext=context;
+    }
+
+    public FileSelectorFragment() {
+        // Required empty public constructor
+    }
+	@Override
+	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
+	{
+		// TODO: Implement this method
+		super.onCreateView(inflater, container, savedInstanceState);
+		
+	}
+	
+
+	@Override
+	public void registerDataSetObserver(DataSetObserver p1)
+	{
+		// TODO: Implement this method
+		return ;
+	}
+
+	@Override
+	public void unregisterDataSetObserver(DataSetObserver p1)
+	{
+		// TODO: Implement this method
+		return ;
+	}
+
+	@Override
+	public int getCount()
+	{
+		// TODO: Implement this method
+		return null;
+	}
+
+	@Override
+	public Object getItem(int p1)
+	{
+		// TODO: Implement this method
+		return null;
+	}
+
+	@Override
+	public int getItemId(int p1)
+	{
+		// TODO: Implement this method
+		return p1;
+	}
+
+	@Override
+	public boolean hasStableIds()
+	{
+		return false;
+	}
+
+	@Override
+	public View getView(int p1, View p2, ViewGroup p3)
+	{
+		// TODO: Implement this method
+		return null;
+	}
+
+	@Override
+	public int getItemViewType(int p1)
+	{
+		// TODO: Implement this method
+		return IGNORE_ITEM_VIEW_TYPE;
+	}
+
+	@Override
+	public int getViewTypeCount()
+	{
+		return 1;
+	}
+
+	@Override
+	public boolean  isEmpty()
+	{
+		if(items==null)
+			return true;
+		return items.isEmpty();
+	}
+
+	@Override
+	public boolean areAllItemsEnabled()
+	{
+		// TODO: Implement this method
+		return true;
+	}
+
+	@Override
+	public boolean isEnabled(int p1)
+	{
+		return true;
+	}
+	
 	/*private List<String> item = (List<String>) null;
 	 private List<String> path = (List<String>) null;*/
 	List<Item> items = new ArrayList<>();
@@ -25,11 +129,11 @@ public class FileSelectorActivity extends ListActivity
 	public void onCreate(Bundle savedInstanceState)
 	{
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.fileaselactivity);
+		//setContentView(R.layout.fileaselactivity);
 		mPath = (TextView) findViewById(R.id.path);
 		String [] abis=android.os.Build.SUPPORTED_ABIS;
 		String binary=null;
-		AssetManager asm=getAssets();
+		AssetManager asm=mContext.getAssets();
 		for (String abi:abis)
 		{
 //			armeabi
@@ -54,7 +158,7 @@ public class FileSelectorActivity extends ListActivity
 		try
 		{
 			InputStream is= asm.open(binary);
-			File dir=getFilesDir();
+			File dir=mContext.getFilesDir();
 			File dest=new File(dir, "/ls.bin");
 			FileOutputStream fos=new FileOutputStream(dest);
 			byte[] data=new byte[2048];
@@ -140,7 +244,7 @@ public class FileSelectorActivity extends ListActivity
 	}
 
 	@Override
-	protected void onListItemClick(ListView l, View v, int position, long id)
+	public void onListItemClick(ListView l, View v, int position, long id)
 	{
 		String p=items.get(position).path;
 		final File file = new File(p);
@@ -179,7 +283,7 @@ public class FileSelectorActivity extends ListActivity
 		{
 			while (!RootTools.isAccessGiven())
 			{
-				RootTools.offerSuperUser(this);
+				RootTools.offerSuperUser(getActivity());
 			}
 			List<DirEnt> entries= runLs(dirPath);
 			items = new ArrayList<>();
@@ -224,7 +328,7 @@ public class FileSelectorActivity extends ListActivity
 	{
 		Collections.sort(items, new Comparator<Item>(){
 				@Override
-				public int compare(FileSelectorActivity.Item p1, FileSelectorActivity.Item p2)
+				public int compare(FileSelectorFragment.Item p1, FileSelectorFragment.Item p2)
 				{
 					int cdir=compareDir(p1,p2);
 					if(cdir==0)
@@ -281,7 +385,7 @@ public class FileSelectorActivity extends ListActivity
 		{
 			item.add(i.caption);
 		};
-		ArrayAdapter<String> fileList = new ArrayAdapter<String>(this, R.layout.row, item);
+		//ArrayAdapter<String> fileList = new ArrayAdapter<String>(this, R.layout.row, item);
 		/*fileList.sort(new Comparator<String>(){
 		 @Override
 		 public int compare(String p1, String p2)
@@ -346,7 +450,7 @@ public class FileSelectorActivity extends ListActivity
 		 return n1.compareTo(n2);
 		 }
 		 });*/
-		setListAdapter(fileList);
+		//setListAdapter(fileList);
 	}
 	private List<DirEnt> runLs(String path)
 	{
